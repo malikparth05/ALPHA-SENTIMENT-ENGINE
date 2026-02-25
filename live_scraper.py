@@ -37,9 +37,7 @@ STOCKS_FILE = "data/indian_stocks.json"
 # We only search specific company news for the top 50 to save time/API limits.
 # The other 2,150+ stocks will get scored based on their SECTOR news.
 TOP_COMPANIES = [
-    "RELIANCE", "TCS", "HDFCBANK", "ICICIBANK", "BHARTIARTL", "INFY", "ITC", 
-    "SBIN", "L&T", "KOTAKBANK", "BAJFINANCE", "AXISBANK", "HINDUNILVR", 
-    "MARUTI", "SUNPHARMA", "ASIANPAINT", "HCLTECH", "TATAMOTORS", "TITAN", "NTPC"
+    "RELIANCE", "TCS", "HDFCBANK", "ICICIBANK", "INFY"
 ]
 
 # Map our internal sectors to good Google search queries
@@ -113,8 +111,8 @@ def fetch_reddit_posts(query: str, count: int = 2) -> list[dict]:
         return []
 
 def fetch_all_headlines(query: str) -> list[dict]:
-    """Fetch from both Google and Reddit."""
-    return fetch_google_news(query, 3) + fetch_reddit_posts(query, 1)
+    """Fetch from Google News (reduced to 1 headline to save massive Cloud CPU time)."""
+    return fetch_google_news(query, 1)
 
 # ───────────────────────────────────────────
 #  Scoring & helpers
