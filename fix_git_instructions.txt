@@ -1,0 +1,34 @@
+Ah, I see exactly what is happening!
+
+Look closely at the error message:
+`Permission to malikparth05/ALPHA-SENTIMENT-ENGINE.git denied to AnakinSkywalker0.`
+
+Your Mac's "Keychain" (password manager) has an old GitHub account saved on it called **`AnakinSkywalker0`**. When you type `git push`, your Mac automatically tries to log in using that old AnakinSkywalker0 account, which is why it gets blocked (403 Permission Denied) from pushing to your `malikparth05` repository.
+
+*(Note: Changing `git config user.name` only changes the name tag on your commits, it does not change your actual login password).*
+
+Here are the two ways to fix this:
+
+### Option 1: The Easiest Way (Use a GitHub Token)
+You can link the repo directly to a Personal Access Token so it bypasses the wrong saved password.
+
+1. Go to GitHub in your browser > Settings > Developer Settings > Personal Access Tokens > Tokens (classic).
+2. Click **Generate new token (classic)**. Give it `repo` permissions and copy the long string it gives you (e.g. `ghp_xxxxxxx...`).
+3. Run this command in your terminal, replacing `<YOUR_TOKEN>` with the token you just copied:
+```bash
+git remote set-url origin https://<YOUR_TOKEN>@github.com/malikparth05/ALPHA-SENTIMENT-ENGINE.git
+```
+4. Now push!
+```bash
+git push -u origin main
+```
+
+### Option 2: Delete the old password from your Mac
+If you just want to clear the old Anakin profile and have it prompt you to log in normally:
+
+1. Press `Cmd + Space` on your Mac keyboard to open Spotlight Search.
+2. Type **"Keychain Access"** and hit Enter to open the app.
+3. In the Keychain Access search bar at the top right, type `github.com`.
+4. Right-click on the "internet password" entry for `github.com` and select **Delete**.
+5. Go back to your terminal and run `git push -u origin main`.
+6. It will now ask you to log in cleanly! (When it asks for a password, you still need to use a GitHub Personal Access Token, not your web password).
