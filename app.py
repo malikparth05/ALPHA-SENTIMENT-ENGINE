@@ -228,12 +228,5 @@ def api_company(ticker):
 
 if __name__ == "__main__":
     import os
-    import threading
-    from live_scraper import main as run_live_scraper
-    
-    # Launch the scraper in a background thread so it runs 24/7 on the cloud
-    scraper_thread = threading.Thread(target=run_live_scraper, daemon=True)
-    scraper_thread.start()
-    
-    port = int(os.environ.get("PORT", 7860))
+        port = int(os.environ.get("PORT", 7860))
     app.run(host="0.0.0.0", debug=False, port=port)
