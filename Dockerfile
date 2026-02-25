@@ -23,4 +23,4 @@ EXPOSE 7860
 ENV FLASK_APP=app.py
 
 # Run the Flask app
-CMD ["flask", "run", "--host=0.0.0.0", "--port=7860"]
+CMD ["python", "app.py"]
