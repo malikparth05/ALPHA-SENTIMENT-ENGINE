@@ -7,3 +7,7 @@ transformers    # HuggingFace — downloads & loads the FinBERT AI model
 torch           # PyTorch — the math engine that runs the AI
 celery[redis]   # Task queue + Redis support (the kitchen manager)
 redis           # Python Redis client
+flask           # Web server for dashboard
+feedparser      # RSS parser for news scraper
+yfinance        # Yahoo Finance library
+colorama        # Terminal colors
