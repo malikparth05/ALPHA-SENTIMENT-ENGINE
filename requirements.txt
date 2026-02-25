@@ -1,0 +1,9 @@
+# Alpha Sentiment Engine — Dependencies
+# Install with:  pip install -r requirements.txt
+
+requests        # Lets your code talk to websites (fetch stock prices & news)
+pandas          # Organizes data into clean tables (like Excel for code)
+transformers    # HuggingFace — downloads & loads the FinBERT AI model
+torch           # PyTorch — the math engine that runs the AI
+celery[redis]   # Task queue + Redis support (the kitchen manager)
+redis           # Python Redis client

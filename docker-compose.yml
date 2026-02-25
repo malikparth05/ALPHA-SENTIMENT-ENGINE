@@ -1,0 +1,24 @@
+# ===========================================
+# Alpha Sentiment Engine — Docker Compose
+# ===========================================
+# This starts Redis (our message queue) in a Docker container.
+#
+# Think of it as: "Install the order board on the kitchen wall"
+#
+# HOW TO USE:
+#   docker-compose up -d       ← start Redis (runs in background)
+#   docker-compose ps          ← check it's running
+#   docker-compose down        ← stop Redis
+# ===========================================
+
+services:
+  redis:
+    image: redis:7-alpine # lightweight Redis image
+    container_name: alpha_redis # easy-to-remember name
+    ports:
+      - "6379:6379" # expose Redis on localhost:6379
+    volumes:
+      - redis_data:/data # keep data between restarts
+
+volumes:
+  redis_data:

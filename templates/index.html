@@ -1,0 +1,196 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Alpha | Live Sentiment Engine</title>
+
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;700&display=swap"
+        rel="stylesheet">
+
+    <!-- Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+
+    <!-- Icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <!-- Custom CSS -->
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+</head>
+
+<body>
+
+    <!-- Ticker Tape -->
+    <div class="ticker-wrap">
+        <div class="ticker" id="top-ticker">
+            <!-- Populated by JS -->
+            <div class="ticker__item">Initializing Live Market Sentiment...</div>
+            <div class="ticker__item">Fetching AI scores from Database...</div>
+        </div>
+    </div>
+
+    <div class="container">
+        <!-- Header -->
+        <header class="glass-bg">
+            <div class="logo">
+                <div class="logo-icon-wrap">
+                    <i class="fa-solid fa-bolt text-cyan"></i>
+                </div>
+                <div class="logo-text">
+                    <h1>ALPHA</h1>
+                    <p>QUANTITATIVE SENTIMENT ENGINE</p>
+                </div>
+            </div>
+
+            <div class="header-status">
+                <div class="pulse-dot"></div>
+                <span>SYSTEM ONLINE: PROCESSING LIVE NEWS</span>
+            </div>
+
+            <div class="search-container">
+                <i class="fa-solid fa-magnifying-glass search-icon text-cyan"></i>
+                <input type="text" id="company-search" placeholder="Search any company (e.g. Reliance)..."
+                    autocomplete="off">
+                <div class="search-results" id="search-results"></div>
+            </div>
+
+            <div class="stats-row">
+                <div class="stat-box">
+                    <div class="stat-icon"><i class="fa-solid fa-chart-line"></i></div>
+                    <div class="stat-details">
+                        <div class="stat-val text-gradient" id="stat-stocks">--</div>
+                        <div class="stat-lbl">ASSETS SCORED</div>
+                    </div>
+                </div>
+                <div class="stat-box">
+                    <div class="stat-icon"><i class="fa-solid fa-newspaper"></i></div>
+                    <div class="stat-details">
+                        <div class="stat-val text-gradient" id="stat-headlines">--</div>
+                        <div class="stat-lbl">ARTICLES READ</div>
+                    </div>
+                </div>
+                <div class="stat-box glow-accuracy">
+                    <div class="stat-icon text-green"><i class="fa-solid fa-brain"></i></div>
+                    <div class="stat-details">
+                        <div class="stat-val text-green glow-text" id="stat-accuracy">86.39%</div>
+                        <div class="stat-lbl">MODEL CONFIDENCE</div>
+                    </div>
+                </div>
+            </div>
+        </header>
+
+        <!-- Main Layout -->
+        <div class="bento-grid">
+
+            <!-- Main Chart Area -->
+            <div class="bento-item area-chart glass-bg">
+                <div class="section-title">
+                    <h2><i class="fa-solid fa-chart-column"></i> REAL-TIME MARKET MOVERS</h2>
+                    <div class="chart-controls">
+                        <span class="badge">NIFTY + SECTORS</span>
+                    </div>
+                </div>
+                <div class="chart-inner">
+                    <canvas id="sentimentBarChart"></canvas>
+                </div>
+            </div>
+
+            <!-- Market Mood Doughnut -->
+            <div class="bento-item area-mood glass-bg">
+                <div class="section-title">
+                    <h2><i class="fa-solid fa-circle-half-stroke"></i> MARKET MOOD</h2>
+                </div>
+                <div class="chart-inner mood-inner">
+                    <canvas id="moodChart"></canvas>
+                    <div class="mood-center-label" id="mood-label">
+                        <span class="mood-val">--</span>
+                        <span class="mood-txt">OVERALL</span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Top Bullish -->
+            <div class="bento-item area-bulls glass-bg">
+                <div class="section-title text-green">
+                    <h2><i class="fa-solid fa-arrow-trend-up"></i> STRONG BUY SIGNALS</h2>
+                </div>
+                <div class="movers-wrap" id="bullish-list">
+                    <div class="loading-state"><i class="fa-solid fa-circle-notch fa-spin"></i> Analyzing...</div>
+                </div>
+            </div>
+
+            <!-- Top Bearish -->
+            <div class="bento-item area-bears glass-bg">
+                <div class="section-title text-red">
+                    <h2><i class="fa-solid fa-arrow-trend-down"></i> STRONG SELL SIGNALS</h2>
+                </div>
+                <div class="movers-wrap" id="bearish-list">
+                    <div class="loading-state"><i class="fa-solid fa-circle-notch fa-spin"></i> Analyzing...</div>
+                </div>
+            </div>
+
+            <!-- Live News Stream -->
+            <div class="bento-item area-news glass-bg">
+                <div class="section-title">
+                    <h2>
+                        <span class="live-indicator"><i class="fa-solid fa-record-vinyl fa-beat"></i> LIVE</span>
+                        AI NEWS INTELLIGENCE
+                    </h2>
+                    <button class="refresh-btn" id="refresh-btn" title="Force Refresh">
+                        <i class="fa-solid fa-rotate-right"></i>
+                    </button>
+                </div>
+                <div class="news-list" id="news-feed">
+                    <div class="loading-state"><i class="fa-solid fa-circle-notch fa-spin"></i> Awaiting new
+                        intelligence...</div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- Company Details Modal -->
+    <div class="modal-overlay" id="company-modal">
+        <div class="modal-content glass-bg">
+            <button class="modal-close" id="modal-close"><i class="fa-solid fa-xmark"></i></button>
+            <div class="modal-header">
+                <div class="modal-title">
+                    <h2 id="modal-ticker">--</h2>
+                    <p id="modal-name">--</p>
+                    <span class="badge" id="modal-sector">--</span>
+                </div>
+                <div class="modal-score-box" id="modal-score-box">
+                    <div class="stat-lbl">CURRENT SCORE</div>
+                    <div class="stat-val" id="modal-score">--</div>
+                </div>
+            </div>
+
+            <div class="modal-body">
+                <!-- Mini Trend Chart -->
+                <div class="modal-chart-wrap">
+                    <h3><i class="fa-solid fa-chart-line"></i> Recent Trend</h3>
+                    <div class="mini-chart"><canvas id="modalTrendChart"></canvas></div>
+                </div>
+
+                <!-- Specific News -->
+                <div class="modal-news-wrap">
+                    <h3><i class="fa-solid fa-newspaper"></i> Intelligence Report (Why is it scoring this way?)</h3>
+                    <div class="modal-news-list" id="modal-news-list">
+                        <div class="loading-state"><i class="fa-solid fa-circle-notch fa-spin"></i> Fetching records...
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Scripts -->
+    <script src="{{ url_for('static', filename='app.js') }}"></script>
+</body>
+
+</html>
