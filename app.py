@@ -228,5 +228,10 @@ def api_company(ticker):
 
 if __name__ == "__main__":
     import os
+    from services.database import create_tables
+    
+    # Initialize SQLite schema if new deployment
+    create_tables()
+    
     port = int(os.environ.get("PORT", 7860))
     app.run(host="0.0.0.0", debug=False, port=port)
