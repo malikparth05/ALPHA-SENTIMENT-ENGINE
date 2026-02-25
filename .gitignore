@@ -41,3 +41,4 @@ celerybeat.pid
 
 # OS Files
 .DS_Store
+*.arrow
