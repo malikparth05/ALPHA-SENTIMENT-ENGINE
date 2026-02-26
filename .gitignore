@@ -26,9 +26,8 @@ share/python-wheels/
 .pytest_cache/
 
 # Databases
-*.sqlite3
-*.db
-sentiment.db
+!sentiment_data.db
+
 
 # Huge Files (Do not push to Git!)
 models/
