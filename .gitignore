@@ -26,6 +26,8 @@ share/python-wheels/
 .pytest_cache/
 
 # Databases
+*.sqlite3
+*.db
 !sentiment_data.db
 
 
