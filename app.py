@@ -23,6 +23,53 @@ def get_db_connection():
     conn.row_factory = sqlite3.Row
     return conn
 
+@app.route("/api/debug")
+def debug_sync():
+    import os, json, traceback
+    from services.database import create_tables
+    logs = []
+    try:
+        logs.append("Starting debug sync...")
+        create_tables()
+        logs.append("Tables initialized.")
+        
+        if os.path.exists("sentiment_data.json"):
+            logs.append("Found sentiment_data.json")
+            conn = get_db_connection()
+            c = conn.cursor()
+            c.execute("DELETE FROM sentiment_averages")
+            c.execute("DELETE FROM sentiment_scores")
+            
+            with open("sentiment_data.json", "r") as f:
+                data = json.load(f)
+                logs.append(f"Loaded {len(data)} averages from JSON.")
+                for r in data:
+                    c.execute("INSERT INTO sentiment_averages (ticker, average_score, num_headlines, confidence, price_change, score_type, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?)", 
+                              (r['ticker'], r['average_score'], r['num_headlines'], r.get('confidence', 'LOW'), r.get('price_change'), r.get('score_type', 'DIRECT'), r['scraped_at']))
+            
+            if os.path.exists("sentiment_headlines.json"):
+                logs.append("Found sentiment_headlines.json")
+                with open("sentiment_headlines.json", "r") as f:
+                    data2 = json.load(f)
+                    logs.append(f"Loaded {len(data2)} headlines from JSON.")
+                    for r in data2:
+                        c.execute("INSERT INTO sentiment_scores (ticker, headline, score, source, validated, scraped_at) VALUES (?, ?, ?, ?, ?, ?)", 
+                                  (r['ticker'], r['headline'], r['score'], r['source'], r.get('validated', 1), r['scraped_at']))
+            
+            conn.commit()
+            
+            c.execute("SELECT COUNT(*) FROM sentiment_scores")
+            total = c.fetchone()[0]
+            logs.append(f"Sync complete. DB sentiment_scores count is now: {total}")
+            conn.close()
+        else:
+            logs.append("sentiment_data.json DOES NOT EXIST in this container.")
+    except Exception as e:
+        logs.append(f"FATAL Exception: {str(e)}")
+        logs.append(traceback.format_exc())
+    
+    return jsonify({"debug_logs": logs})
+
 @app.route("/")
 def index():
     return render_template("index.html")
@@ -33,12 +80,11 @@ def api_stats():
     conn = get_db_connection()
     c = conn.cursor()
     
-    c.execute("SELECT COUNT(*) FROM sentiment_scores")
+    c.execute("SELECT COUNT(*) FROM sentiment_scores WHERE validated = 1")
     total_headlines = c.fetchone()[0]
     
-    # Get number of unique stocks scored today
-    today = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    c.execute("SELECT COUNT(DISTINCT ticker) FROM sentiment_averages WHERE scraped_at LIKE ?", (f"{today}%",))
+    # Get number of unique stocks scored (excluding sector entries)
+    c.execute("SELECT COUNT(DISTINCT ticker) FROM sentiment_averages WHERE ticker NOT LIKE 'SECTOR_%'")
     stocks_scored = c.fetchone()[0]
     
     conn.close()
@@ -57,7 +103,7 @@ def api_overview():
     
     # Get the latest average score for each ticker
     query = """
-    SELECT ticker, average_score as score 
+    SELECT ticker, average_score as score, confidence, price_change, score_type 
     FROM sentiment_averages 
     WHERE id IN (
         SELECT MAX(id) 
@@ -71,9 +117,22 @@ def api_overview():
     results = [dict(row) for row in c.fetchall()]
     conn.close()
     
-    # Split into bullish and bearish
-    bullish = [r for r in results if r['score'] > 0.1][:15] # Top 15 positive
-    bearish = [r for r in results if r['score'] < -0.1][-15:] # Top 15 negative
+    # Filter out SECTOR_ entries from display
+    results = [r for r in results if not r['ticker'].startswith('SECTOR_')]
+    
+    # Prioritize DIRECT and HYBRID scores over SECTOR-only
+    direct_hybrid = [r for r in results if r.get('score_type') in ('DIRECT', 'HYBRID')]
+    sector_only = [r for r in results if r.get('score_type') == 'SECTOR']
+    
+    # Bullish: DIRECT/HYBRID first, then fill with SECTOR if needed
+    dh_bullish = [r for r in direct_hybrid if r['score'] > 0.1]
+    s_bullish = [r for r in sector_only if r['score'] > 0.1]
+    bullish = (dh_bullish + s_bullish)[:15]
+    
+    # Bearish: same priority
+    dh_bearish = sorted([r for r in direct_hybrid if r['score'] < -0.1], key=lambda x: x['score'])
+    s_bearish = sorted([r for r in sector_only if r['score'] < -0.1], key=lambda x: x['score'])
+    bearish = (dh_bearish + s_bearish)[:15]
     
     # Add company names
     for items in [bullish, bearish]:
@@ -82,7 +141,7 @@ def api_overview():
             
     return jsonify({
         "bullish": bullish,
-        "bearish": bearish[::-1] # Reverse so most negative is first
+        "bearish": bearish
     })
 
 @app.route("/api/headlines")
@@ -123,7 +182,6 @@ def api_search():
     conn = get_db_connection()
     c = conn.cursor()
     
-    # Simple search: match ticker exactly or name partially
     # Find matching tickers from STOCK_NAMES
     matches = []
     for ticker, name in STOCK_NAMES.items():
@@ -131,45 +189,45 @@ def api_search():
             matches.append(ticker)
     
     if not matches:
+        conn.close()
         return jsonify({"results": []})
         
-    # Get latest score for the top match
-    best_match = matches[0]
-    best_name = STOCK_NAMES[best_match]
+    # Get latest score for top 10 matches
+    results = []
+    for match_ticker in matches[:10]:
+        c.execute('''
+            SELECT average_score as score, confidence, price_change, score_type, scraped_at
+            FROM sentiment_averages 
+            WHERE ticker = ?
+            ORDER BY id DESC LIMIT 1
+        ''', (match_ticker,))
+        
+        score_row = c.fetchone()
+        if score_row:
+            result = dict(score_row)
+            result['ticker'] = match_ticker
+            result['name'] = STOCK_NAMES[match_ticker]
+            results.append(result)
     
-    c.execute('''
-        SELECT average_score as score, scraped_at
-        FROM sentiment_averages 
-        WHERE ticker = ? OR ticker = ? 
-        ORDER BY id DESC LIMIT 1
-    ''', (best_match, f"SECTOR_{best_match}"))
-    
-    score_row = c.fetchone()
-    
-    if score_row:
-        result = dict(score_row)
-        result['ticker'] = best_match
-        result['name'] = best_name
-        return jsonify({"results": [result]})
+    conn.close()
+    return jsonify({"results": results})
+
 @app.route("/api/company/<ticker>")
 def api_company(ticker):
     """Get detailed data for a single company (trend + headlines)."""
     conn = get_db_connection()
     c = conn.cursor()
     
-    # 1. Get recent trend (last 10 averages)
-    # The scraper saves both direct ticker and SECTOR_ticker scores
-    # We will grab history for both and combine
+    # 1. Get recent trend (last 10 averages) — direct ticker only
     c.execute('''
-        SELECT average_score as score, scraped_at 
+        SELECT average_score as score, confidence, price_change, score_type, scraped_at 
         FROM sentiment_averages 
-        WHERE ticker = ? OR ticker = ?
+        WHERE ticker = ?
         ORDER BY id DESC LIMIT 10
-    ''', (ticker, f"SECTOR_{ticker}"))
+    ''', (ticker,))
     
     trend_rows = [dict(row) for row in c.fetchall()]
     
-    # Reverse so oldest is first for the chart
     trend = []
     for r in trend_rows[::-1]:
         try:
@@ -179,14 +237,7 @@ def api_company(ticker):
             r['time_label'] = ""
         trend.append(r)
         
-    # 2. Get specific headlines for this company/sector
-    # To understand *why* the score is what it is
-    # We find the sector from STOCK_NAMES if possible
-    # We don't have direct access to the sector mapping array here easily,
-    # but the scraper saves sector news as SECTOR_Name.
-    
-    # Try finding the sector name for this ticker
-    # We need to read the JSON for the full mapping since STOCK_NAMES is just symbol->name
+    # 2. Get headlines for this company (direct only, entity-validated)
     try:
         with open(STOCKS_FILE, "r") as f:
             full_data = json.load(f)
@@ -198,9 +249,9 @@ def api_company(ticker):
     c.execute('''
         SELECT headline, score, source, scraped_at 
         FROM sentiment_scores 
-        WHERE ticker = ? OR ticker = ?
+        WHERE ticker = ?
         ORDER BY id DESC LIMIT 15
-    ''', (ticker, f"SECTOR_{sector}"))
+    ''', (ticker,))
     
     headlines_rows = [dict(row) for row in c.fetchall()]
     headlines = []
@@ -214,14 +265,17 @@ def api_company(ticker):
         
     conn.close()
     
-    # Safely get current score or 0
     current_score = trend[-1]['score'] if trend else 0.0
+    latest_confidence = trend[-1].get('confidence', 'LOW') if trend else 'LOW'
+    latest_price = trend[-1].get('price_change') if trend else None
     
     return jsonify({
         "ticker": ticker,
         "name": STOCK_NAMES.get(ticker, ticker),
         "sector": sector,
         "current_score": current_score,
+        "confidence": latest_confidence,
+        "price_change": latest_price,
         "trend": trend,
         "headlines": headlines
     })

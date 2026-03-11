@@ -153,34 +153,127 @@ def fetch_industry_mapping() -> dict[str, str]:
     return industries
 
 
-def get_sector_from_name(company_name: str) -> str:
+# Manual overrides for top companies that keyword matching gets wrong
+COMPANY_SECTOR_OVERRIDES = {
+    # Conglomerates / Holding
+    "RELIANCE": "Energy", "ADANIENT": "Infrastructure", "ADANIPORTS": "Logistics",
+    "ADANIGREEN": "Energy", "ADANIPOWER": "Energy", "ADANITRANS": "Energy",
+    "LT": "Infrastructure", "GRASIM": "Chemicals", "GODREJCP": "FMCG",
+    "GODREJPROP": "Real Estate", "GODREJIND": "Chemicals",
+    # Banking that keyword might miss
+    "BAJFINANCE": "Banking", "BAJAJFINSV": "Banking", "CHOLAFIN": "Banking",
+    "SHRIRAMFIN": "Banking", "MUTHOOTFIN": "Banking", "MANAPPURAM": "Banking",
+    "PEL": "Banking", "LICHSGFIN": "Banking", "CANFINHOME": "Banking",
+    "IDFCFIRSTB": "Banking", "INDUSINDBK": "Banking",
+    # IT companies with non-obvious names
+    "INFY": "IT", "WIPRO": "IT", "TCS": "IT", "HCLTECH": "IT", "TECHM": "IT",
+    "LTIM": "IT", "LTTS": "IT", "PERSISTENT": "IT", "COFORGE": "IT",
+    "MPHASIS": "IT", "TATAELXSI": "IT", "OFSS": "IT", "NAUKRI": "IT",
+    "ROUTE": "IT", "HAPPSTMNDS": "IT", "MASTEK": "IT", "SONATA": "IT",
+    # Pharma companies
+    "CIPLA": "Pharma", "DIVISLAB": "Pharma", "DRREDDY": "Pharma",
+    "SUNPHARMA": "Pharma", "LUPIN": "Pharma", "TORNTPHARM": "Pharma",
+    "AUROPHARMA": "Pharma", "BIOCON": "Pharma", "ALKEM": "Pharma",
+    "MAXHEALTH": "Pharma", "APOLLOHOSP": "Pharma", "LALPATHLAB": "Pharma",
+    # Consumer / FMCG
+    "ITC": "FMCG", "HINDUNILVR": "FMCG", "NESTLEIND": "FMCG",
+    "BRITANNIA": "FMCG", "TATACONSUM": "FMCG", "DABUR": "FMCG",
+    "MARICO": "FMCG", "COLPAL": "FMCG", "EMAMILTD": "FMCG",
+    "PATANJALI": "FMCG", "PAGEIND": "Textiles", "TITAN": "Retail",
+    "DMART": "Retail", "TRENT": "Retail", "PVRINOX": "Media",
+    # Auto
+    "TATAMOTORS": "Auto", "M&M": "Auto", "MARUTI": "Auto",
+    "EICHERMOT": "Auto", "BAJAJ-AUTO": "Auto", "HEROMOTOCO": "Auto",
+    "ASHOKLEY": "Auto", "TVSMOTORS": "Auto", "MOTHERSON": "Auto",
+    "BOSCHLTD": "Auto", "EXIDEIND": "Auto", "AMARARAJA": "Auto",
+    # Defence / Aerospace
+    "HAL": "Defence", "BEL": "Defence", "MAZDOCK": "Defence",
+    "COCHINSHIP": "Defence", "GRSE": "Defence",
+    # Metals & Mining
+    "TATASTEEL": "Metal", "JSWSTEEL": "Metal", "SAIL": "Metal",
+    "HINDALCO": "Metal", "VEDL": "Metal", "NMDC": "Metal",
+    "JINDALSTEL": "Metal", "NATIONALUM": "Metal", "COALINDIA": "Metal",
+    # Energy / Oil & Gas
+    "ONGC": "Energy", "BPCL": "Energy", "IOC": "Energy", "GAIL": "Energy",
+    "NTPC": "Energy", "POWERGRID": "Energy", "TATAPOWER": "Energy",
+    "NHPC": "Energy", "IRFC": "Infrastructure", "RECLTD": "Energy",
+    # Telecom
+    "BHARTIARTL": "Telecom", "IDEA": "Telecom",
+    # Cement
+    "ULTRACEMCO": "Real Estate", "AMBUJACEM": "Real Estate",
+    "SHREECEM": "Real Estate", "ACC": "Real Estate",
+    # Insurance
+    "SBILIFE": "Insurance", "HDFCLIFE": "Insurance", "ICICIPRULI": "Insurance",
+    "POLICYBZR": "Insurance",
+    # Fintech
+    "PAYTM": "Banking", "NYKAA": "Retail", "ZOMATO": "FMCG",
+    # Transport
+    "IRCTC": "Logistics", "INDIGO": "Logistics",
+    # Real Estate
+    "DLF": "Real Estate", "OBEROIRLTY": "Real Estate",
+    # Chemicals
+    "PIDILITIND": "Chemicals", "SRF": "Chemicals", "BERGEPAINT": "Chemicals",
+    "ASIANPAINT": "Chemicals",
+    # Electronics / Consumer Durables  
+    "HAVELLS": "Consumer Durables", "VOLTAS": "Consumer Durables",
+    "BLUESTARLT": "Consumer Durables", "CROMPTON": "Consumer Durables",
+    "DIXON": "Consumer Durables",
+}
+
+
+def get_sector_from_name(company_name: str, symbol: str = "") -> str:
     """
     Guess the sector from the company name using keywords.
-    This is a fallback for companies without sector data.
+    First checks manual overrides, then uses expanded keyword matching.
     """
+    # Check manual overrides first
+    if symbol and symbol in COMPANY_SECTOR_OVERRIDES:
+        return COMPANY_SECTOR_OVERRIDES[symbol]
+
     name_lower = company_name.lower()
 
     sector_keywords = {
-        "Banking": ["bank", "finance", "financial", "credit", "lending"],
-        "IT": ["tech", "software", "computer", "info", "digital", "cyber", "data"],
-        "Pharma": ["pharma", "drug", "med", "health", "hospital", "bio", "life science", "therapeutic"],
-        "Auto": ["motor", "auto", "vehicle", "car", "tyre", "tire", "tractor"],
-        "FMCG": ["consumer", "food", "beverage", "dairy", "biscuit", "tea", "coffee", "soap"],
-        "Energy": ["power", "energy", "electric", "solar", "wind", "oil", "gas", "petro", "coal"],
-        "Metal": ["steel", "iron", "metal", "alumin", "copper", "zinc", "mining"],
-        "Telecom": ["telecom", "communication", "mobile", "wireless"],
-        "Real Estate": ["realty", "estate", "housing", "property", "construction", "infra", "build", "cement"],
-        "Chemicals": ["chem", "fertilizer", "pesticide", "paint", "dye"],
-        "Textiles": ["textile", "fabric", "cotton", "garment", "apparel", "silk", "wool", "yarn"],
-        "Media": ["media", "entertainment", "film", "broadcast", "publish", "news"],
-        "Insurance": ["insurance", "assurance"],
-        "Agriculture": ["agri", "seed", "crop", "plantation", "sugar", "farm"],
-        "Logistics": ["logistics", "transport", "shipping", "warehouse", "cargo", "port"],
-        "Retail": ["retail", "mart", "store", "shop", "mall"],
-        "Hotels": ["hotel", "hospitality", "tourism", "travel", "restaurant"],
-        "Paper": ["paper", "packaging", "carton", "pulp"],
-        "Defence": ["defence", "defense", "weapon", "ammunition", "aerospace"],
-        "Jewellery": ["jewel", "gold", "diamond", "gem", "ornament"],
+        "Banking": ["bank", "finance", "financial", "credit", "lending", "capital", "invest",
+                     "fund", "wealth", "asset", "nidhi", "microfinance", "nbfc", "housing fin"],
+        "IT": ["tech", "software", "computer", "info", "digital", "cyber", "data", "cloud",
+               "system", "solution", "consult", "internet", "e-comm", "online"],
+        "Pharma": ["pharma", "drug", "med", "health", "hospital", "bio", "life science",
+                    "therapeutic", "diagnos", "laborator", "path lab", "clinic", "care"],
+        "Auto": ["motor", "auto", "vehicle", "car", "tyre", "tire", "tractor", "scooter",
+                 "bike", "two wheel", "three wheel"],
+        "FMCG": ["consumer", "food", "beverage", "dairy", "biscuit", "tea", "coffee", "soap",
+                  "personal care", "nutrition", "snack", "spice", "edible", "flour", "rice"],
+        "Energy": ["power", "energy", "electric", "solar", "wind", "oil", "gas", "petro",
+                    "coal", "renewable", "thermal", "hydro", "nuclear", "refiner"],
+        "Metal": ["steel", "iron", "metal", "alumin", "copper", "zinc", "mining", "ore",
+                   "alloy", "foundry", "smelt", "casting", "forg"],
+        "Telecom": ["telecom", "communication", "mobile", "wireless", "network", "broadband",
+                     "fibre", "tower", "satellite"],
+        "Real Estate": ["realty", "estate", "housing", "property", "construction", "infra",
+                         "build", "cement", "concrete", "ceramics", "tile", "sanitary",
+                         "marble", "granite"],
+        "Chemicals": ["chem", "fertilizer", "pesticide", "paint", "dye", "pigment", "adhesive",
+                       "polymer", "plastic", "resin", "specialty chem", "agrochem", "coating"],
+        "Textiles": ["textile", "fabric", "cotton", "garment", "apparel", "silk", "wool",
+                      "yarn", "weaving", "spinning", "denim", "fashion"],
+        "Media": ["media", "entertainment", "film", "broadcast", "publish", "news", "print",
+                   "advertising", "digital media", "content", "animation", "gaming"],
+        "Insurance": ["insurance", "assurance", "life insur", "general insur"],
+        "Agriculture": ["agri", "seed", "crop", "plantation", "sugar", "farm", "fertili",
+                         "irrigation", "horticulture"],
+        "Logistics": ["logistics", "transport", "shipping", "warehouse", "cargo", "port",
+                       "courier", "express", "supply chain", "aviation", "airline", "railway"],
+        "Retail": ["retail", "mart", "store", "shop", "mall", "e-commerce", "jewel",
+                    "gold", "diamond", "gem", "ornament", "watch", "luxury"],
+        "Hotels": ["hotel", "hospitality", "tourism", "travel", "restaurant", "resort",
+                    "catering", "food service"],
+        "Paper": ["paper", "packaging", "carton", "pulp", "corrugat", "box", "container"],
+        "Defence": ["defence", "defense", "weapon", "ammunition", "aerospace", "shipbuild",
+                     "naval", "ordnance", "missile"],
+        "Consumer Durables": ["appliance", "electronic", "electrical", "lamp", "light",
+                               "fan", "air condition", "refrig", "washing", "kitchen"],
+        "Education": ["education", "school", "university", "learning", "coaching", "academy",
+                       "training", "skill"],
     }
 
     for sector, keywords in sector_keywords.items():
@@ -218,7 +311,7 @@ def build_full_stock_list():
         elif "industry" in stock and stock["industry"]:
             stock["sector"] = stock["industry"]
         else:
-            stock["sector"] = get_sector_from_name(stock["name"])
+            stock["sector"] = get_sector_from_name(stock["name"], symbol)
 
     # Step 4: Build sector summary
     sectors = {}

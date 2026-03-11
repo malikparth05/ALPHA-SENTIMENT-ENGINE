@@ -28,7 +28,6 @@ share/python-wheels/
 # Databases
 *.sqlite3
 *.db
-!sentiment_data.db
 
 
 # Huge Files (Do not push to Git!)

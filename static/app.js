@@ -88,7 +88,7 @@ function renderBarChart(bullish, bearish) {
     const chartData = [...bullish.slice(0, 7), ...bearish.slice(0, 7)];
     chartData.sort((a, b) => b.score - a.score); // Highest to lowest
 
-    const labels = chartData.map(d => d.ticker.replace('SECTOR_', '') + (d.ticker.includes('SECTOR') ? ' Sec' : ''));
+    const labels = chartData.map(d => d.ticker);
     const scores = chartData.map(d => d.score);
 
     const bgColors = scores.map(s => s > 0.1 ? BG_GREEN : (s < -0.1 ? BG_RED : BG_CYAN));
@@ -210,21 +210,26 @@ function renderMoversList(elementId, items, isBullish) {
     const colorClass = isBullish ? 'text-green' : 'text-red';
 
     items.slice(0, 5).forEach(item => {
-        let sym = item.ticker;
-        let name = item.name;
-        if (sym.startsWith('SECTOR_')) {
-            sym = sym.replace('SECTOR_', '');
-            name = sym + ' Sector Average';
-        }
+        const sym = item.ticker;
+        const name = item.name;
+        const conf = item.confidence || '';
+        const confBadge = conf === 'HIGH' ? '<span class="conf-badge conf-high">HIGH</span>' :
+            conf === 'MEDIUM' ? '<span class="conf-badge conf-med">MED</span>' : '<span class="conf-badge conf-low">LOW</span>';
+        const priceStr = item.price_change != null ?
+            `<span class="price-tag ${item.price_change >= 0 ? 'price-up' : 'price-down'}">${item.price_change >= 0 ? '▲' : '▼'} ${Math.abs(item.price_change).toFixed(2)}%</span>` : '';
+        const st = item.score_type || 'DIRECT';
+        const typeBadge = st === 'DIRECT' ? '<span class="type-badge type-direct">🎯</span>' :
+            st === 'HYBRID' ? '<span class="type-badge type-hybrid">📊</span>' : '<span class="type-badge type-sector">🏷️</span>';
 
         container.innerHTML += `
             <div class="mover-row" style="cursor:pointer;" onclick="openCompanyModal('${item.ticker}')">
                 <div class="mover-info">
-                    <span class="mover-sym">${sym}</span>
+                    <span class="mover-sym">${sym} ${confBadge} ${typeBadge}</span>
                     <span class="mover-name">${name}</span>
                 </div>
-                <div class="mover-score ${colorClass}">
-                    ${fScore(item.score)}
+                <div class="mover-score-wrap">
+                    <div class="mover-score ${colorClass}">${fScore(item.score)}</div>
+                    ${priceStr}
                 </div>
             </div>
         `;
@@ -247,7 +252,7 @@ async function fetchHeadlines() {
         const colorClass = isBull ? 'text-green' : (isBear ? 'text-red' : 'text-cyan');
         const borderClass = isBull ? 'bullish' : (isBear ? 'bearish' : '');
 
-        let displayTicker = news.ticker.startsWith('SECTOR_') ? news.ticker.replace('SECTOR_', '') : news.ticker;
+        let displayTicker = news.ticker;
 
         container.innerHTML += `
             <div class="news-card ${borderClass}" style="cursor:pointer;" onclick="openCompanyModal('${news.ticker}')">
@@ -275,8 +280,8 @@ function renderTickerTape(bulls, bears) {
     const tapes = [];
     const max = Math.max(bulls.length, bears.length);
     for (let i = 0; i < max; i++) {
-        if (bulls[i]) tapes.push(`<div class="ticker__item">${bulls[i].ticker.replace('SECTOR_', '')} <span class="up">▲ ${fScore(bulls[i].score)}</span></div>`);
-        if (bears[i]) tapes.push(`<div class="ticker__item">${bears[i].ticker.replace('SECTOR_', '')} <span class="down">▼ ${fScore(bears[i].score)}</span></div>`);
+        if (bulls[i]) tapes.push(`<div class="ticker__item">${bulls[i].ticker} <span class="up">▲ ${fScore(bulls[i].score)}</span></div>`);
+        if (bears[i]) tapes.push(`<div class="ticker__item">${bears[i].ticker} <span class="down">▼ ${fScore(bears[i].score)}</span></div>`);
     }
 
     // Duplicate to ensure smooth infinite scroll
@@ -310,16 +315,23 @@ searchInput.addEventListener('input', (e) => {
             if (data.results && data.results.length > 0) {
                 data.results.forEach(item => {
                     const colorClass = item.score > 0.1 ? 'text-green' : (item.score < -0.1 ? 'text-red' : 'text-cyan');
+                    const st = item.score_type || 'DIRECT';
+                    const typeIcon = st === 'DIRECT' ? '🎯' : (st === 'HYBRID' ? '📊' : '🏷️');
                     searchResults.innerHTML += `
                         <div class="search-result-item" onclick="openCompanyModal('${item.ticker}')">
                             <div class="mover-info">
-                                <span class="mover-sym">${item.ticker.replace('SECTOR_', '')}</span>
+                                <span class="mover-sym">${item.ticker} ${typeIcon}</span>
                                 <span class="mover-name">${item.name}</span>
                             </div>
                             <div class="mover-score ${colorClass}">${fScore(item.score)}</div>
                         </div>
                     `;
                 });
+                // Position dropdown below search input (fixed positioning)
+                const rect = searchInput.getBoundingClientRect();
+                searchResults.style.top = (rect.bottom + 8) + 'px';
+                searchResults.style.left = rect.left + 'px';
+                searchResults.style.width = rect.width + 'px';
                 searchResults.style.display = 'block';
             } else {
                 searchResults.innerHTML = '<div class="search-result-item"><span class="text-muted">No data found</span></div>';
@@ -351,11 +363,8 @@ modal.addEventListener('click', (e) => {
 });
 
 async function openCompanyModal(rawTicker) {
-    // Hide search if open
     document.getElementById('search-results').style.display = 'none';
-
-    // Clean ticker
-    const ticker = rawTicker.replace('SECTOR_', '');
+    const ticker = rawTicker;
 
     try {
         const res = await fetch(`/api/company/${encodeURIComponent(ticker)}`);
@@ -369,6 +378,27 @@ async function openCompanyModal(rawTicker) {
         const scoreEl = document.getElementById('modal-score');
         scoreEl.textContent = fScore(data.current_score);
         scoreEl.className = 'stat-val ' + (data.current_score > 0.1 ? 'text-green' : (data.current_score < -0.1 ? 'text-red' : 'text-cyan'));
+
+        // Confidence badge
+        const confEl = document.getElementById('modal-confidence');
+        if (confEl) {
+            const conf = data.confidence || 'LOW';
+            confEl.textContent = conf;
+            confEl.className = 'conf-badge ' + (conf === 'HIGH' ? 'conf-high' : conf === 'MEDIUM' ? 'conf-med' : 'conf-low');
+        }
+
+        // Price change
+        const priceEl = document.getElementById('modal-price');
+        if (priceEl) {
+            if (data.price_change != null) {
+                const isUp = data.price_change >= 0;
+                priceEl.textContent = `${isUp ? '▲' : '▼'} ${Math.abs(data.price_change).toFixed(2)}%`;
+                priceEl.className = 'price-tag ' + (isUp ? 'price-up' : 'price-down');
+                priceEl.style.display = 'inline-block';
+            } else {
+                priceEl.style.display = 'none';
+            }
+        }
 
         // 2. Trend Chart
         renderModalChart(data.trend);
@@ -398,10 +428,9 @@ async function openCompanyModal(rawTicker) {
                 `;
             });
         } else {
-            newsList.innerHTML = '<div class="text-muted">No specific news found. Driven by general market sentiment.</div>';
+            newsList.innerHTML = '<div class="text-muted">No verified news found for this company yet.</div>';
         }
 
-        // Show Modal
         modal.style.display = 'flex';
 
     } catch (err) {

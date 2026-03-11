@@ -20,7 +20,7 @@
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <!-- Custom CSS -->
-    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}">
+    <link rel="stylesheet" href="{{ url_for('static', filename='style.css') }}?v=5">
 </head>
 
 <body>
@@ -56,7 +56,6 @@
                 <i class="fa-solid fa-magnifying-glass search-icon text-cyan"></i>
                 <input type="text" id="company-search" placeholder="Search any company (e.g. Reliance)..."
                     autocomplete="off">
-                <div class="search-results" id="search-results"></div>
             </div>
 
             <div class="stats-row">
@@ -167,6 +166,8 @@
                 <div class="modal-score-box" id="modal-score-box">
                     <div class="stat-lbl">CURRENT SCORE</div>
                     <div class="stat-val" id="modal-score">--</div>
+                    <span class="conf-badge conf-low" id="modal-confidence">--</span>
+                    <span class="price-tag" id="modal-price" style="display:none;"></span>
                 </div>
             </div>
 
@@ -190,7 +191,10 @@
     </div>
 
     <!-- Scripts -->
-    <script src="{{ url_for('static', filename='app.js') }}"></script>
+    <!-- Search results dropdown (outside header to avoid backdrop-filter clipping) -->
+    <div class="search-results" id="search-results"></div>
+
+    <script src="{{ url_for('static', filename='app.js') }}?v=5"></script>
 </body>
 
 </html>

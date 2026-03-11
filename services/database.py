@@ -45,6 +45,7 @@ def create_tables() -> None:
             headline TEXT NOT NULL,
             score REAL NOT NULL,
             source TEXT,
+            validated INTEGER DEFAULT 1,
             scraped_at TEXT NOT NULL
         )
     """)
@@ -56,15 +57,36 @@ def create_tables() -> None:
             ticker TEXT NOT NULL,
             average_score REAL NOT NULL,
             num_headlines INTEGER NOT NULL,
+            confidence TEXT DEFAULT 'LOW',
+            price_change REAL,
+            score_type TEXT DEFAULT 'DIRECT',
             scraped_at TEXT NOT NULL
         )
     """)
+
+    # Migrate: add new columns to existing tables if they don't exist
+    try:
+        cursor.execute("ALTER TABLE sentiment_scores ADD COLUMN validated INTEGER DEFAULT 1")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE sentiment_averages ADD COLUMN confidence TEXT DEFAULT 'LOW'")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE sentiment_averages ADD COLUMN price_change REAL")
+    except sqlite3.OperationalError:
+        pass
+    try:
+        cursor.execute("ALTER TABLE sentiment_averages ADD COLUMN score_type TEXT DEFAULT 'DIRECT'")
+    except sqlite3.OperationalError:
+        pass
 
     conn.commit()
     conn.close()
 
 
-def save_score(ticker: str, headline: str, score: float, source: str) -> None:
+def save_score(ticker: str, headline: str, score: float, source: str, validated: bool = True) -> None:
     """
     Save one scored headline to the database.
     Called once per headline after the AI scores it.
@@ -75,15 +97,17 @@ def save_score(ticker: str, headline: str, score: float, source: str) -> None:
     now = datetime.now(timezone.utc).isoformat()
 
     cursor.execute(
-        "INSERT INTO sentiment_scores (ticker, headline, score, source, scraped_at) VALUES (?, ?, ?, ?, ?)",
-        (ticker, headline, score, source, now),
+        "INSERT INTO sentiment_scores (ticker, headline, score, source, validated, scraped_at) VALUES (?, ?, ?, ?, ?, ?)",
+        (ticker, headline, score, source, 1 if validated else 0, now),
     )
 
     conn.commit()
     conn.close()
 
 
-def save_average(ticker: str, average_score: float, num_headlines: int) -> None:
+def save_average(ticker: str, average_score: float, num_headlines: int,
+                 confidence: str = "LOW", price_change: float = None,
+                 score_type: str = "DIRECT") -> None:
     """
     Save the average sentiment for a stock after a scrape cycle.
     This is what the dashboard will use to draw trend charts.
@@ -94,8 +118,8 @@ def save_average(ticker: str, average_score: float, num_headlines: int) -> None:
     now = datetime.now(timezone.utc).isoformat()
 
     cursor.execute(
-        "INSERT INTO sentiment_averages (ticker, average_score, num_headlines, scraped_at) VALUES (?, ?, ?, ?)",
-        (ticker, average_score, num_headlines, now),
+        "INSERT INTO sentiment_averages (ticker, average_score, num_headlines, confidence, price_change, score_type, scraped_at) VALUES (?, ?, ?, ?, ?, ?, ?)",
+        (ticker, average_score, num_headlines, confidence, price_change, score_type, now),
     )
 
     conn.commit()

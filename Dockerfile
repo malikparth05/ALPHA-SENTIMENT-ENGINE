@@ -1,9 +1,9 @@
 FROM python:3.10-slim
 
-# Install system dependencies (like SQLite)
-RUN apt-get update && apt-get install -y sqlite3 && rm -rf /var/lib/apt/lists/*
+# Install system dependencies
+RUN apt-get update && apt-get install -y sqlite3 git && rm -rf /var/lib/apt/lists/*
 
-# Set up user map to prevent Hugging Face permission errors
+# Set up user for Hugging Face Spaces
 RUN useradd -m -u 1000 user
 USER user
 ENV HOME=/home/user \
@@ -18,9 +18,12 @@ RUN pip install --no-cache-dir -r requirements.txt
 # Copy all the project files into the container
 COPY --chown=user . .
 
+# Make startup script executable
+RUN chmod +x start.sh
+
 # Hugging Face Spaces expects the app to run on port 7860
 EXPOSE 7860
 ENV FLASK_APP=app.py
 
-# Run the Flask app
-CMD ["python", "app.py"]
+# Run both Flask dashboard + Live Scraper
+CMD ["bash", "start.sh"]
